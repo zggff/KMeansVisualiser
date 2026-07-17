@@ -3,25 +3,38 @@ import SwiftUI
 
 struct ContentView: View {
 	@ObserveInjection var redraw
+	@State private var dataset: KMeansSolver = KMeansSolver(points: KMeansSolver.generateMouseSet(), clusters: 4)
 
-	@State private var index = 0
-	private var colors = [
-		MTLClearColor(red: 1.0, green: 1.0, blue: 0.5, alpha: 1.0),
-		MTLClearColor(red: 1.0, green: 0.0, blue: 1.0, alpha: 1.0),
-		MTLClearColor(red: 0.0, green: 1.0, blue: 1.0, alpha: 1.0),
-	]
+
+	private var models: [Primitive] {
+		let colors = [
+			Vec3(0.8, 0, 0), Vec3(0.8, 0.8, 0), Vec3(0, 0.8, 0), Vec3(0, 0.8, 0.8), Vec3(0, 0, 0.8),
+		]
+		let points = dataset.points.map({ p in
+			Primitive.sphere(center: p.pos, radius: 1, color: colors[p.cluster % colors.count])
+		})
+		let centers  = dataset.centroids.enumerated().map({ (i, p) in
+			Primitive.sphere(center: p, radius: 2, color: Vec3(0.2, 0.2, 0.2))
+		})
+		return points + centers
+	}
 
 	var body: some View {
-		VStack(spacing: 20) {
-			Button("\(index + 1) out of \(colors.count)") {
-				index += 1
-				if index >= colors.count {
-					index = 0
-				}
+		HStack {
+			VStack {
+				Button("regenerate") {
+					dataset = KMeansSolver(points: KMeansSolver.generateMouseSet(), clusters: 4)
+				}.keyboardShortcut("r", modifiers: []).buttonStyle(.bordered)
+
+				Button("nextStep") {
+					dataset.updateClusters()
+				}.keyboardShortcut(.space, modifiers: [])
+				Scene3DView(models: models).buttonStyle(.bordered)
 			}
-			MetalView(backgroundColor: colors[index])
 		}
 		.padding()
+		.focusable()
+		.focusEffectDisabled()
 		.enableInjection()
 	}
 }

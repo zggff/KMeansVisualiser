@@ -1,67 +1,55 @@
 import MetalKit
 
-extension Vertex {
-	static var defaultLayout: MTLVertexDescriptor {
-		let vertexDescriptor = MTLVertexDescriptor()
-		vertexDescriptor.attributes[0].format = .float3
-		vertexDescriptor.attributes[0].bufferIndex = 0
-		vertexDescriptor.attributes[0].offset = 0
-		vertexDescriptor.layouts[0].stride = MemoryLayout<Vertex>.stride
-		return vertexDescriptor
-	}
-}
-
-private func buildPipeline(device: MTLDevice) -> MTLRenderPipelineState {
-	let pipeline: MTLRenderPipelineState
-	let pipelineDescriptor = MTLRenderPipelineDescriptor()
-	let library = device.makeDefaultLibrary()!
-
-	pipelineDescriptor.vertexFunction = library.makeFunction(name: "vertexMain")
-	pipelineDescriptor.fragmentFunction = library.makeFunction(name: "fragmentMain")
-	pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
-	pipelineDescriptor.vertexDescriptor = Vertex.defaultLayout
-
-	do {
-		pipeline = try device.makeRenderPipelineState(descriptor: pipelineDescriptor)
-		return pipeline
-	} catch {
-		fatalError()
-	}
-}
-
 class MetalRenderer: NSObject, MTKViewDelegate {
 	var parent: MetalView
 	var device: MTLDevice!
 	var commandQueue: MTLCommandQueue!
-	var pipeline: MTLRenderPipelineState
+	let pipeline: MTLRenderPipelineState
+	let depthState: MTLDepthStencilState
+
+	let allocator: MTKMeshBufferAllocator
 
 	var sceneUniforms = SceneUniforms()
-	var mesh: Mesh
-	let allocator: MTKMeshBufferAllocator
+	let meshes: [Mesh]
 
 	init(_ parent: MetalView, device: MTLDevice) {
 		self.parent = parent
 		self.device = device
 		self.allocator = MTKMeshBufferAllocator(device: device)
 		self.commandQueue = device.makeCommandQueue()
-		self.pipeline = buildPipeline(device: device)
+		self.meshes = [Mesh.cube(device), Mesh.sphere(device)]
 
-		self.mesh = Mesh.sphere(device)
-		self.sceneUniforms.cameraTranslation = Matrix.translation([0, 0, -4]).inverse
+		let pipelineDescriptor = MTLRenderPipelineDescriptor()
+		let library = device.makeDefaultLibrary()!
 
+		pipelineDescriptor.vertexFunction = library.makeFunction(name: "vertexMain")
+		pipelineDescriptor.fragmentFunction = library.makeFunction(name: "fragmentMain")
+		pipelineDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+		pipelineDescriptor.depthAttachmentPixelFormat = .depth32Float
+		pipelineDescriptor.vertexDescriptor = Vertex.defaultLayout
+
+		self.pipeline = try! device.makeRenderPipelineState(descriptor: pipelineDescriptor)
+
+		let depthDescriptor = MTLDepthStencilDescriptor()
+		depthDescriptor.depthCompareFunction = .less
+		depthDescriptor.isDepthWriteEnabled = true
+
+		self.depthState = device.makeDepthStencilState(descriptor: depthDescriptor)!
 		super.init()
 	}
 
 	func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
 		let aspect = Float(view.bounds.width) / Float(view.bounds.height)
 		sceneUniforms.projection = Matrix.projection(
-			projectionFov: Float(70).degreesToRadians,
+			projectionFov: Float(70).degrees,
 			near: 0.1,
-			far: 100,
+			far: 1000,
 			aspect: aspect)
 	}
 
 	func draw(in view: MTKView) {
+		sceneUniforms.view = parent.camera.view
+
 		guard let drawable = view.currentDrawable else { return }
 
 		let commandBuffer = commandQueue.makeCommandBuffer()!
@@ -71,45 +59,33 @@ class MetalRenderer: NSObject, MTKViewDelegate {
 		renderPassDescriptor.colorAttachments[0].loadAction = .clear
 		renderPassDescriptor.colorAttachments[0].storeAction = .store
 
+		renderPassDescriptor.depthAttachment.clearDepth = 1.0
+		renderPassDescriptor.depthAttachment.loadAction = .clear
+		renderPassDescriptor.depthAttachment.storeAction = .dontCare
+
 		let renderEncoder = commandBuffer.makeRenderCommandEncoder(
 			descriptor: renderPassDescriptor)!
 		renderEncoder.setCullMode(.back)
 		renderEncoder.setRenderPipelineState(pipeline)
+		renderEncoder.setDepthStencilState(depthState)
 
-		let instances = [
-			ModelUniforms(
-				translation:
-					Matrix.translation([-0.2, 0, 0])
-					* Matrix.rotation(around: [1, 1, 0], radians: Float(50).degreesToRadians)
-					* Matrix.scale([1, 1.5, 1]), color: [1, 0, 0]),
-			ModelUniforms(
-				translation:
-					Matrix.translation([1, 0, 0])
-					* Matrix.rotation(around: [1, 1, 0], radians: Float(50).degreesToRadians)
-					* Matrix.scale([1, 1, 1]), color: [0, 1, 0]),
+		renderEncoder.setVertexBytes(
+			&sceneUniforms, length: MemoryLayout<SceneUniforms>.stride, index: 1)
 
-		]
+		for type in MeshType.allCases {
+			let instances = parent.models.filter { s in s.meshId == type }.map { s in s.uniform }
+			if instances.isEmpty { continue }
+			let instanceBuffer = instances.makeMTLBuffer(device: device)
 
-		let sceneBuffer = device.makeBuffer(
-			bytes: &sceneUniforms,
-			length: MemoryLayout<SceneUniforms>.stride,
-			options: []
-		)!
+			let mesh = meshes[type.rawValue]
+			renderEncoder.setVertexBuffer(mesh.vertex, offset: 0, index: 0)
+			renderEncoder.setVertexBuffer(instanceBuffer, offset: 0, index: 2)
+			renderEncoder.drawIndexedPrimitives(
+				type: .triangle, indexCount: mesh.count, indexType: .uint16,
+				indexBuffer: mesh.index,
+				indexBufferOffset: 0, instanceCount: instances.count)
 
-		let modelBuffer = device.makeBuffer(
-			bytes: instances,
-			length: instances.count * MemoryLayout<ModelUniforms>.stride,
-			options: []
-		)!
-
-		renderEncoder.setVertexBuffer(mesh.vertex, offset: 0, index: 0)
-		renderEncoder.setVertexBuffer(sceneBuffer, offset: 0, index: 1)
-		renderEncoder.setVertexBuffer(modelBuffer, offset: 0, index: 2)
-
-		renderEncoder.drawIndexedPrimitives(
-			type: .triangle, indexCount: mesh.count, indexType: .uint16,
-			indexBuffer: mesh.index,
-			indexBufferOffset: 0, instanceCount: instances.count)
+		}
 
 		renderEncoder.endEncoding()
 

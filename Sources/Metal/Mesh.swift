@@ -1,12 +1,10 @@
 import Metal
 
-extension Array {
-	func makeMTLBuffer(device: MTLDevice) -> MTLBuffer {
-		return self.withUnsafeBytes({ ptr in
-			return device.makeBuffer(bytes: ptr.baseAddress!, length: ptr.count)!
-		})
-	}
+enum MeshType: Int, CaseIterable {
+    case Cube
+    case Sphere
 }
+
 
 struct Mesh {
 	let vertex: MTLBuffer
@@ -53,29 +51,11 @@ struct Mesh {
 		return cachedCube!
 	}
 
-	static func triangle(_ device: MTLDevice) -> Self {
-		if let cachedTriangle {
-			return cachedTriangle
-		}
-
-		let vertices = [
-			Vertex(position: [-0.75, -0.75, 0.0]),
-			Vertex(position: [0.75, -0.75, 0.0]),
-			Vertex(position: [0.0, 0.75, 0.0]),
-		]
-		cachedTriangle = Self.makeMesh(
-			device,
-			vertices: vertices,
-			indices: [0, 1, 2]
-		)
-		return cachedTriangle!
-	}
-
 	static func sphere(_ device: MTLDevice) -> Self {
 		var vertices: [Vertex] = []
 		var indices: [UInt16] = []
 		let vertex_cnt: UInt16 = 100
-		let radius: Float = 1.0
+		let radius: Float = 0.5
 
 		for i in 0...vertex_cnt {
 			let stackAngle = Float.pi / 2.0 - Float(i) * Float.pi / Float(vertex_cnt)

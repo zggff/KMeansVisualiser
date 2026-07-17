@@ -1,17 +1,26 @@
+import simd
+
 public typealias Matrix = float4x4
 public typealias Vec3 = SIMD3<Float>
 public typealias Vec4 = SIMD4<Float>
 
 extension FloatingPoint {
-	var degreesToRadians: Self {
+	/// converts value in degrees to radians
+	var degrees: Self {
 		return self * .pi / 180
 	}
-	var radiansToDegrees: Self {
+
+	/// converts value in radians to degrees
+	var radians: Self {
 		return self * 180 / .pi
 	}
 }
 
 extension Matrix {
+	var transposed: Matrix {
+		return simd_transpose(self)
+	}
+
 	static func projection(projectionFov fov: Float, near: Float, far: Float, aspect: Float)
 		-> Matrix
 	{
@@ -36,9 +45,11 @@ extension Matrix {
 			Vec4(dimensions.x, dimensions.y, dimensions.z, 1),
 		)
 	}
+
 	static func scale(_ dimensions: Vec3) -> Matrix {
 		return Matrix(diagonal: Vec4(dimensions.x, dimensions.y, dimensions.z, 1))
 	}
+
 	static func rotation(around axis: Vec3, radians angle: Float) -> Matrix {
 		let u = normalize(axis)
 		let (x, y, z) = (u.x, u.y, u.z)
@@ -57,5 +68,33 @@ extension Matrix {
 				z * z * (1 - cosv) + cosv, 0),
 			Vec4(0, 0, 0, 1),
 		)
+	}
+
+	static func look_at(eye: Vec3, target: Vec3, up: Vec3) -> Matrix {
+		let forward = normalize(target - eye)
+		let right = normalize(cross(up, forward))
+		let trueUp = cross(forward, right)
+
+		return Matrix(
+			Vec4(right.x, trueUp.x, forward.x, 0),
+			Vec4(right.y, trueUp.y, forward.y, 0),
+			Vec4(right.z, trueUp.z, forward.z, 0),
+			Vec4(-dot(right, eye), -dot(trueUp, eye), -dot(forward, eye), 1)
+		)
+	}
+}
+
+extension Vec3 {
+	/// converts [radial, polar, azimuth] to [x, y, z]
+	var polar: Vec3 {
+		Vec3(
+			x * cos(y) * sin(z),
+			x * sin(y),
+			x * cos(y) * cos(z)
+		)
+	}
+
+	var length: Float {
+		return simd_length(self)
 	}
 }

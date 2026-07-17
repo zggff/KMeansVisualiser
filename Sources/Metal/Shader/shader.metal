@@ -2,6 +2,7 @@
 #include <metal_stdlib>
 using namespace metal;
 
+// TODO: accept multiple meshes
 
 struct VertexOutput {
     float4 position [[position]];
@@ -10,12 +11,12 @@ struct VertexOutput {
 
 vertex VertexOutput vertexMain(Vertex v [[stage_in]],
                                constant SceneUniforms &scene [[buffer(1)]],
-                               constant ModelUniforms *models [[buffer(2)]],
+                               constant InstanceUniforms *models [[buffer(2)]],
                                uint instanceID [[instance_id]]) {
     VertexOutput data;
-    ModelUniforms model = models[instanceID];
+    InstanceUniforms model = models[instanceID];
     float4 position = float4(v.position, 1.0);
-    data.position = scene.projection * scene.cameraTranslation * model.translation * position;
+    data.position = scene.projection * scene.view * model.translation * position;
     data.color = half3(model.color);
     return data;
 };

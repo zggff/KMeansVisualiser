@@ -15,10 +15,10 @@ struct Vertex {
 
 struct SceneUniforms {
     matrix_float4x4 projection;
-    matrix_float4x4 cameraTranslation;
+    matrix_float4x4 view;
 };
 
-struct ModelUniforms {
+struct InstanceUniforms {
     matrix_float4x4 translation;
     vector_float3 color;
 };

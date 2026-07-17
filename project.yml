@@ -14,13 +14,15 @@ targets:
   KMeans:
     type: application
     platform: [macOS, iOS]
-    deploymentTarget: "16.0"
+    # deploymentTarget: "16.0"
     sources: [Sources]
     dependencies:
       - package: Inject 
       - package: InjectionNext 
     settings:
       base:
+        MACOSX_DEPLOYMENT_TARGET: "15.0"
+        IPHONEOS_DEPLOYMENT_TARGET: "18.0"
         SWIFT_OBJC_BRIDGING_HEADER: Sources/metal/shader/bridge.h
         GENERATE_INFOPLIST_FILE: YES
       configs:
