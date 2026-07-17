@@ -1,33 +1,25 @@
 import Metal
 
-enum MeshType: Int, CaseIterable {
-    case Cube
-    case Sphere
-}
-
-
-struct Mesh {
+class Mesh {
 	let vertex: MTLBuffer
 	let index: MTLBuffer
 	let count: Int
 
-	private static var cachedCube: Mesh?
-	private static var cachedTriangle: Mesh?
-	private static var cachedSphere: Mesh?
-
-	static func makeMesh(_ device: MTLDevice, vertices: [Vertex], indices: [UInt16]) -> Mesh {
-		return Mesh(
-			vertex: device.makeBuffer(
-				bytes: vertices, length: vertices.count * MemoryLayout<Vertex>.stride)!,
-			index: device.makeBuffer(
-				bytes: indices, length: indices.count * MemoryLayout<UInt16>.stride)!,
-			count: indices.count)
+	init?(_ device: MTLDevice, vertices: [Vertex], indices: [UInt16]) {
+		guard
+			let vertex = device.makeBuffer(
+				bytes: vertices, length: vertices.count * MemoryLayout<Vertex>.stride),
+			let index = device.makeBuffer(
+				bytes: indices, length: indices.count * MemoryLayout<UInt16>.stride)
+		else {
+			return nil
+		}
+		self.vertex = vertex
+		self.index = index
+		self.count = indices.count
 	}
 
-	static func cube(_ device: MTLDevice) -> Self {
-		if let cachedCube {
-			return cachedCube
-		}
+	static func cube(_ device: MTLDevice) -> Mesh? {
 		let s = Float(0.5)
 		let vertices: [Vertex] = [
 			Vertex(position: SIMD3<Float>(-s, -s, s)),
@@ -47,14 +39,12 @@ struct Mesh {
 			3, 2, 6, 6, 7, 3,
 			4, 5, 1, 1, 0, 4,
 		]
-		cachedCube = Self.makeMesh(device, vertices: vertices, indices: indices)
-		return cachedCube!
+		return Mesh(device, vertices: vertices, indices: indices)
 	}
 
-	static func sphere(_ device: MTLDevice) -> Self {
+	static func sphere(_ device: MTLDevice, vertex_cnt: UInt16 = 100) -> Mesh? {
 		var vertices: [Vertex] = []
 		var indices: [UInt16] = []
-		let vertex_cnt: UInt16 = 100
 		let radius: Float = 0.5
 
 		for i in 0...vertex_cnt {
@@ -90,7 +80,16 @@ struct Mesh {
 				k2 += 1
 			}
 		}
-		cachedSphere = makeMesh(device, vertices: vertices, indices: indices)
-		return cachedSphere!
+		return Mesh(device, vertices: vertices, indices: indices)
 	}
+}
+
+extension Mesh: Hashable {
+    static func == (lhs: Mesh, rhs: Mesh) -> Bool {
+        return lhs === rhs 
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(ObjectIdentifier(self))
+    }
 }

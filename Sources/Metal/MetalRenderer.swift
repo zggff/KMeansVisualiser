@@ -7,17 +7,12 @@ class MetalRenderer: NSObject, MTKViewDelegate {
 	let pipeline: MTLRenderPipelineState
 	let depthState: MTLDepthStencilState
 
-	let allocator: MTKMeshBufferAllocator
-
 	var sceneUniforms = SceneUniforms()
-	let meshes: [Mesh]
 
 	init(_ parent: MetalView, device: MTLDevice) {
 		self.parent = parent
 		self.device = device
-		self.allocator = MTKMeshBufferAllocator(device: device)
 		self.commandQueue = device.makeCommandQueue()
-		self.meshes = [Mesh.cube(device), Mesh.sphere(device)]
 
 		let pipelineDescriptor = MTLRenderPipelineDescriptor()
 		let library = device.makeDefaultLibrary()!
@@ -72,12 +67,14 @@ class MetalRenderer: NSObject, MTKViewDelegate {
 		renderEncoder.setVertexBytes(
 			&sceneUniforms, length: MemoryLayout<SceneUniforms>.stride, index: 1)
 
-		for type in MeshType.allCases {
-			let instances = parent.models.filter { s in s.meshId == type }.map { s in s.uniform }
-			if instances.isEmpty { continue }
+		let groupedByMesh = Dictionary(grouping: parent.models){ (m: Renderable) -> Mesh in
+			return type(of: m).getMesh(for: device)
+		}
+
+		for (mesh, models) in groupedByMesh {
+			let instances = models.map { s in s.uniform }
 			let instanceBuffer = instances.makeMTLBuffer(device: device)
 
-			let mesh = meshes[type.rawValue]
 			renderEncoder.setVertexBuffer(mesh.vertex, offset: 0, index: 0)
 			renderEncoder.setVertexBuffer(instanceBuffer, offset: 0, index: 2)
 			renderEncoder.drawIndexedPrimitives(

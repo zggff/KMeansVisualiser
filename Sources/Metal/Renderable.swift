@@ -1,7 +1,11 @@
+import Metal
+
 protocol Renderable {
-	var meshId: MeshType { get }
 	var translation: Matrix { get }
 	var color: Vec3 { get }
+
+	static var mesh: Mesh? { get set }
+	static func createMesh(for device: MTLDevice) -> Mesh
 }
 
 extension Renderable {
@@ -9,31 +13,39 @@ extension Renderable {
 		InstanceUniforms(
 			translation: self.translation, color: self.color)
 	}
+	static func getMesh(for device: MTLDevice) -> Mesh {
+		if let existingMesh = mesh {
+			return existingMesh
+		}
+		let newMesh = createMesh(for: device)
+		mesh = newMesh
+		return newMesh
+	}
 }
 
-enum Primitive: Renderable {
-	case cube(center: Vec3, size: Vec3, color: Vec3)
-	case sphere(center: Vec3, radius: Float, color: Vec3)
+enum Primitive {
+	struct Cube: Renderable {
+		let center: Vec3
+		let size: Vec3
+		let color: Vec3
+		var translation: Matrix { Matrix.translation(center) * Matrix.scale(size) }
 
-	var meshId: MeshType {
-		return switch self {
-			case .cube: MeshType.Cube
-			case .sphere: MeshType.Sphere
+		static var mesh: Mesh? = nil
+		static func createMesh(for device: MTLDevice) -> Mesh {
+			return Mesh.cube(device)!
 		}
 	}
-	var translation: Matrix {
-		return switch self {
-			case .cube(let center, let size, _):
-				Matrix.translation(center) * Matrix.scale(size)
-			case .sphere(let center, let radius, _):
-				Matrix.translation(center) * Matrix.scale(Vec3(repeating: radius))
+	struct Sphere: Renderable {
+		let center: Vec3
+		let radius: Float
+		let color: Vec3
+		var translation: Matrix {
+			Matrix.translation(center) * Matrix.scale(Vec3(repeating: radius))
 		}
-	}
 
-	var color: Vec3 {
-		return switch self {
-			case .cube(_, _, let color): color
-			case .sphere(_, _, let color): color
+		static var mesh: Mesh? = nil
+		static func createMesh(for device: MTLDevice) -> Mesh {
+			return Mesh.sphere(device)!
 		}
 	}
 }

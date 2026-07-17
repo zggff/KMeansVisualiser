@@ -2,8 +2,6 @@
 #include <metal_stdlib>
 using namespace metal;
 
-// TODO: accept multiple meshes
-
 struct VertexOutput {
     float4 position [[position]];
     half3 color;

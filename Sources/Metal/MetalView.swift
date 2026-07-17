@@ -18,17 +18,17 @@ import SwiftUI
 
 struct MetalView: ViewRepresentable {
 	let backgroundColor: MTLClearColor
-    let camera: Camera
-    let models: [Renderable]
+	let camera: Camera
+	let models: [Renderable]
 
-    var onScroll: ((CGFloat) -> Void)? = nil
+	var onScroll: ((CGFloat) -> Void)? = nil
 
-    private static let device: MTLDevice = {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            fatalError("No Metal device")
-        }
-        return device
-    }()
+	private static let device: MTLDevice = {
+		guard let device = MTLCreateSystemDefaultDevice() else {
+			fatalError("No Metal device")
+		}
+		return device
+	}()
 	func makeCoordinator() -> MetalRenderer {
 		MetalRenderer(self, device: Self.device)
 	}
@@ -38,29 +38,29 @@ struct MetalView: ViewRepresentable {
 		mtkView.delegate = context.coordinator
 		mtkView.preferredFramesPerSecond = 60
 		mtkView.enableSetNeedsDisplay = true
-        mtkView.depthStencilPixelFormat = .depth32Float
+		mtkView.depthStencilPixelFormat = .depth32Float
 
 		mtkView.device = Self.device
 		mtkView.framebufferOnly = false
 		mtkView.drawableSize = mtkView.frame.size
 
-        mtkView.scrollHandler = onScroll
+		mtkView.scrollHandler = onScroll
 		return mtkView
 	}
 
-    private class CustomMTKView: MTKView {
-        var scrollHandler: ((CGFloat) -> Void)?
-        
-        #if os(macOS)
-        override func scrollWheel(with event: NSEvent) {
-            if let scrollHandler = scrollHandler {
-                scrollHandler(event.deltaY)
-            } else {
-                super.scrollWheel(with: event)
-            }
-        }
-        #endif
-    }
+	private class CustomMTKView: MTKView {
+		var scrollHandler: ((CGFloat) -> Void)?
+
+		#if os(macOS)
+			override func scrollWheel(with event: NSEvent) {
+				if let scrollHandler = scrollHandler {
+					scrollHandler(event.deltaY)
+				} else {
+					super.scrollWheel(with: event)
+				}
+			}
+		#endif
+	}
 
 	func updateNSView(_ uiView: MTKView, context: ViewRepresentableContext<MetalView>) {
 		context.coordinator.parent = self

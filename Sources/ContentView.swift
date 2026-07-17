@@ -6,15 +6,15 @@ struct ContentView: View {
 	@State private var dataset: KMeansSolver = KMeansSolver(points: KMeansSolver.generateMouseSet(), clusters: 4)
 
 
-	private var models: [Primitive] {
+	private var models: [Renderable] {
 		let colors = [
 			Vec3(0.8, 0, 0), Vec3(0.8, 0.8, 0), Vec3(0, 0.8, 0), Vec3(0, 0.8, 0.8), Vec3(0, 0, 0.8),
 		]
 		let points = dataset.points.map({ p in
-			Primitive.sphere(center: p.pos, radius: 1, color: colors[p.cluster % colors.count])
+			Primitive.Sphere(center: p.pos, radius: 1, color: colors[p.cluster % colors.count])
 		})
 		let centers  = dataset.centroids.enumerated().map({ (i, p) in
-			Primitive.sphere(center: p, radius: 2, color: Vec3(0.2, 0.2, 0.2))
+			Primitive.Cube(center: p, size: Vec3(2, 2, 2), color: Vec3(0.2, 0.2, 0.2))
 		})
 		return points + centers
 	}
