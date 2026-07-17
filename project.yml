@@ -1,0 +1,29 @@
+name: KMeans
+options:
+  bundleIdPrefix: com.zggff
+
+packages:
+  Inject:
+    url: https://github.com/krzysztofzablocki/Inject.git
+    from: 1.6.0
+  InjectionNext:
+    url: https://github.com/johnno1962/InjectionNext.git
+    from: 2.0.0
+
+targets:
+  KMeans:
+    type: application
+    platform: [macOS, iOS]
+    deploymentTarget: "16.0"
+    sources: [Sources]
+    dependencies:
+      - package: Inject 
+      - package: InjectionNext 
+    settings:
+      base:
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/metal/shader/bridge.h
+        GENERATE_INFOPLIST_FILE: YES
+      configs:
+        Debug:
+          OTHER_LDFLAGS: "$(inherited) -Xlinker -interposable"
+          EMIT_FRONTEND_COMMAND_LINES: "YES"
