@@ -31,7 +31,7 @@ struct Scene3DView: View {
 				}.simultaneously(
 					with: MagnifyGesture()
 						.onChanged { value in
-							let delta = Float(value.magnification) - 1.0
+							let delta = Float(value.velocity)
 							distance = max(minDistance, distance - delta * 5.0)
 						})
 		).enableInjection()

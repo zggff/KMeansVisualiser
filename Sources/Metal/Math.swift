@@ -97,4 +97,8 @@ extension Vec3 {
 	var length: Float {
 		return simd_length(self)
 	}
+    var lengthSquared: Float {
+		return simd_length_squared(self)
+	}
+
 }

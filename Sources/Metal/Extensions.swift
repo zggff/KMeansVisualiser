@@ -1,15 +1,5 @@
 import Metal
 
-
-extension Array {
-	func makeMTLBuffer(device: MTLDevice) -> MTLBuffer {
-		return self.withUnsafeBytes({ ptr in
-			return device.makeBuffer(bytes: ptr.baseAddress!, length: ptr.count)!
-		})
-	}
-}
-
-
 extension UInt32 {
 	var mtlColor: MTLClearColor {
 		let r = Double(self >> 24 & 0xff) / 255

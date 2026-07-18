@@ -8,6 +8,7 @@ class MetalRenderer: NSObject, MTKViewDelegate {
 	let depthState: MTLDepthStencilState
 
 	var sceneUniforms = SceneUniforms()
+	var instancesBuffer: MTLBuffer
 
 	init(_ parent: MetalView, device: MTLDevice) {
 		self.parent = parent
@@ -30,6 +31,8 @@ class MetalRenderer: NSObject, MTKViewDelegate {
 		depthDescriptor.isDepthWriteEnabled = true
 
 		self.depthState = device.makeDepthStencilState(descriptor: depthDescriptor)!
+		self.instancesBuffer = device.makeBuffer(
+			length: 256 * MemoryLayout<InstanceUniforms>.stride)!
 		super.init()
 	}
 
@@ -67,21 +70,39 @@ class MetalRenderer: NSObject, MTKViewDelegate {
 		renderEncoder.setVertexBytes(
 			&sceneUniforms, length: MemoryLayout<SceneUniforms>.stride, index: 1)
 
-		let groupedByMesh = Dictionary(grouping: parent.models){ (m: Renderable) -> Mesh in
-			return type(of: m).getMesh(for: device)
+		var renderGroups: [ObjectIdentifier: (mesh: Mesh, uniforms: [InstanceUniforms])] = [:]
+		for item in parent.models {
+			let typeId = ObjectIdentifier(type(of: item))
+			if renderGroups[typeId] != nil {
+				renderGroups[typeId]!.uniforms.append(item.uniform)
+			} else {
+				let mesh = item.mesh(for: device)
+				renderGroups[typeId] = (mesh: mesh, uniforms: [item.uniform])
+			}
+		}
+		let totalBufferSize =
+			renderGroups.values.reduce(
+				into: 0, { partialResult, r in partialResult += r.1.count })
+			* MemoryLayout<InstanceUniforms>.stride
+		if instancesBuffer.length < totalBufferSize {
+			instancesBuffer = device.makeBuffer(length: totalBufferSize)!
 		}
 
-		for (mesh, models) in groupedByMesh {
-			let instances = models.map { s in s.uniform }
-			let instanceBuffer = instances.makeMTLBuffer(device: device)
+		var offset = 0
+		for (mesh, instances) in renderGroups.values {
+			let byteCount = instances.count * MemoryLayout<InstanceUniforms>.stride
+			let destination = instancesBuffer.contents().advanced(by: offset)
+			instances.withUnsafeBufferPointer { pointer in
+				_ = memcpy(destination, pointer.baseAddress, byteCount)
+			}
 
 			renderEncoder.setVertexBuffer(mesh.vertex, offset: 0, index: 0)
-			renderEncoder.setVertexBuffer(instanceBuffer, offset: 0, index: 2)
+			renderEncoder.setVertexBuffer(instancesBuffer, offset: offset, index: 2)
 			renderEncoder.drawIndexedPrimitives(
 				type: .triangle, indexCount: mesh.count, indexType: .uint16,
 				indexBuffer: mesh.index,
 				indexBufferOffset: 0, instanceCount: instances.count)
-
+			offset += byteCount
 		}
 
 		renderEncoder.endEncoding()

@@ -1,6 +1,6 @@
 import Metal
 
-class Mesh {
+struct Mesh {
 	let vertex: MTLBuffer
 	let index: MTLBuffer
 	let count: Int
@@ -82,14 +82,4 @@ class Mesh {
 		}
 		return Mesh(device, vertices: vertices, indices: indices)
 	}
-}
-
-extension Mesh: Hashable {
-    static func == (lhs: Mesh, rhs: Mesh) -> Bool {
-        return lhs === rhs 
-    }
-
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(ObjectIdentifier(self))
-    }
 }
