@@ -9,6 +9,8 @@ packages:
   InjectionNext:
     url: https://github.com/johnno1962/InjectionNext.git
     from: 2.0.0
+  Renderer3D:
+    path: ./Renderer3D
 
 targets:
   KMeans:
@@ -19,11 +21,13 @@ targets:
     dependencies:
       - package: Inject 
       - package: InjectionNext 
+      - package: Renderer3D
     settings:
       base:
         MACOSX_DEPLOYMENT_TARGET: "15.0"
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"
-        SWIFT_OBJC_BRIDGING_HEADER: Sources/metal/shader/bridge.h
+        SWIFT_VERSION: 6.3
+        # SWIFT_OBJC_BRIDGING_HEADER: Sources/metal/shader/bridge.h
         GENERATE_INFOPLIST_FILE: YES
       configs:
         Debug:

@@ -1,3 +1,6 @@
+import simd
+import Renderer3D
+
 struct KMeansSolver {
 	static func generateRandomSphericalCluster(center: Vec3, radius: Float, count: Int) -> [Vec3] {
 		return (0..<count).map({ _ in

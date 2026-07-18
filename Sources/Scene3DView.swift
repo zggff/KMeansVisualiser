@@ -1,5 +1,6 @@
 import Inject
 import SwiftUI
+import Renderer3D
 
 struct Scene3DView: View {
 	@ObserveInjection var redraw
