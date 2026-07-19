@@ -1,7 +1,7 @@
-import simd
 import Renderer3D
+import simd
 
-struct KMeansSolver {
+struct KMeansSolver: Equatable {
 	static func generateRandomSphericalCluster(center: Vec3, radius: Float, count: Int) -> [Vec3] {
 		return (0..<count).map({ _ in
 			Vec3(
@@ -28,11 +28,13 @@ struct KMeansSolver {
 
 	var points: [ClusteredPoint]
 	var centroids: [Vec3] = []
-	let bounds: (Vec3, Vec3)
+	let maxBound: Vec3
+	let minBound: Vec3
+	let epsilon: Float
 
 	private var converged: Bool = false
 
-	init(points: [Vec3], clusters: Int) {
+	init(points: [Vec3], clusters: Int, epsilon: Float = 0.00001) {
 		let first = points.first ?? Vec3(0, 0, 0)
 		var upper = first
 		var lower = first
@@ -45,20 +47,22 @@ struct KMeansSolver {
 			upper.z = max(upper.z, p.z)
 
 		}
-		self.bounds = (lower, upper)
+		self.minBound = lower
+        self.maxBound = upper
 		self.points = points.map { p in ClusteredPoint(pos: p, cluster: 0) }
-        self.createCentroids(count: clusters)
+		self.epsilon = epsilon
+		self.createCentroids(count: clusters)
 	}
 
 	mutating func createCentroids(count: Int) {
 		self.centroids = (0..<count).map({ _ in
 			Vec3(
-				Float.random(in: bounds.0.x...bounds.1.x),
-				Float.random(in: bounds.0.y...bounds.1.y),
-				Float.random(in: bounds.0.z...bounds.1.z),
+				Float.random(in: minBound.x...maxBound.x),
+				Float.random(in: minBound.y...maxBound.y),
+				Float.random(in: minBound.z...maxBound.z),
 			)
 		})
-        self.assignToClusters()
+		self.assignToClusters()
 	}
 
 	mutating func assignToClusters() {
@@ -85,9 +89,9 @@ struct KMeansSolver {
 			let matchingPoints = self.points.filter({ p in p.cluster == id })
 			guard !matchingPoints.isEmpty else {
 				return Vec3(
-					Float.random(in: bounds.0.x...bounds.1.x),
-					Float.random(in: bounds.0.y...bounds.1.y),
-					Float.random(in: bounds.0.z...bounds.1.z),
+					Float.random(in: minBound.x...maxBound.x),
+					Float.random(in: minBound.y...maxBound.y),
+					Float.random(in: minBound.z...maxBound.z),
 				)
 			}
 			return matchingPoints.reduce(
@@ -96,7 +100,7 @@ struct KMeansSolver {
 
 		})
 		converged = zip(centroids, newCentroids).allSatisfy({ (a, b) in
-			(a - b).lengthSquared < Float.ulpOfOne
+			(a - b).lengthSquared < epsilon
 		})
 		if !converged {
 			centroids = newCentroids
@@ -104,10 +108,12 @@ struct KMeansSolver {
 		}
 		return converged
 	}
-
+	static func == (lhs: KMeansSolver, rhs: KMeansSolver) -> Bool {
+		lhs.centroids == rhs.centroids
+	}
 }
 
-struct ClusteredPoint {
+struct ClusteredPoint: Equatable {
 	let pos: Vec3
 	var cluster: Int
 }

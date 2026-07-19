@@ -17,7 +17,7 @@ targets:
     type: application
     platform: [macOS, iOS]
     # deploymentTarget: "16.0"
-    sources: [Sources]
+    sources: [Sources, Resources]
     dependencies:
       - package: Inject 
       - package: InjectionNext 
