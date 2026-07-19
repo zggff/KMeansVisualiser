@@ -4,21 +4,23 @@ import SwiftUI
 
 #if os(macOS)
 	import AppKit
-	public typealias UIImage = NSImage
+	public typealias NativeImage = NSImage
 #elseif os(iOS)
 	import UIKit
+	public typealias NativeImage = UIImage
 #endif
 
 struct KMeansImageView: View {
 	@ObserveInjection var redraw
 
-	@State var centroidsCount: Float = 3
+	@State var centroidsCount: Float = 10
 
-	@State private var image: UIImage? = {
+	@State private var image: NativeImage? = {
 		guard let path = Bundle.main.path(forResource: "roses", ofType: "jpg") else { return nil }
-		return UIImage(contentsOfFile: path)
+		return NativeImage(contentsOfFile: path)
 	}()
 
+	@State private var newImage: NativeImage? = nil
 	@State private var dataset: KMeansSolver? = nil
 	@State private var converged = false
 	@State private var originalColor = true
@@ -27,10 +29,31 @@ struct KMeansImageView: View {
 	@State private var cameraState = CameraState()
 	@State private var scene = Scene3D()
 
+	private func setupNewImage() {
+		guard showImage && !originalColor else { return }
+		guard let dataset = dataset, let image = image else { return }
+
+		#if os(macOS)
+			guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+				return
+			}
+		#elseif os(iOS)
+			guard let cgImage = image.cgImage else { return }
+		#endif
+
+		let width = cgImage.width
+		let height = cgImage.height
+
+		let quantizedPoints = dataset.points.map { p in
+			dataset.centroids[p.cluster]
+		}
+		self.newImage = generateImage(from: quantizedPoints, width: width, height: height)
+	}
+
 	private func setupSolver() {
 		guard let image else { return }
-		let points = KMeansSolver.generateImageSet(from: image)
-		dataset = KMeansSolver(points: points, clusters: 3)
+		let points = generateImageSet(from: image)
+		dataset = KMeansSolver(points: points, clusters: Int(centroidsCount))
 	}
 
 	private func setupScene() {
@@ -54,71 +77,148 @@ struct KMeansImageView: View {
 		scene.finishDeclaration()
 	}
 
+	private func copyToClipboard(_ text: String) {
+		#if os(macOS)
+			let pasteboard = NSPasteboard.general
+			pasteboard.clearContents()
+			pasteboard.setString(text, forType: .string)
+		#elseif os(iOS)
+			UIPasteboard.general.string = text
+		#endif
+	}
+
 	var body: some View {
-		VStack {
-			Slider(
-				value: $centroidsCount, in: 1...40, step: 1,
-				onEditingChanged: { editing in
-					if editing { return }
+		HStack {
+			if let dataset {
+				List {
+					Text("\(dataset.centroids.count)").font(.title)
+					ForEach(Array(dataset.centroids.enumerated()), id: \.offset) { index, color in
+						let uiColor = Color(
+							red: Double(color.x) / 0xff,
+							green: Double(color.y) / 0xff,
+							blue: Double(color.z) / 0xff
+						)
+						let (x, y, z) = (Int(color.x), Int(color.y), Int(color.z))
+						let hexString = String(format: "#%02X%02X%02X", x, y, z)
+						HStack {
+							Spacer()
+
+							Text(hexString)
+								.font(.title2)
+								.fontWeight(.bold)
+								.foregroundColor(.black)
+								.padding(.horizontal, 16)
+								.padding(.vertical, 8)
+								.background(Color.white)
+							Spacer()
+						}
+						.padding(.vertical, 8)
+						.onTapGesture {
+							copyToClipboard(hexString)
+						}
+						.background(uiColor)
+					}
+				}.frame(
+					minWidth: nil, idealWidth: nil, maxWidth: 300, minHeight: nil, idealHeight: nil,
+					maxHeight: nil, alignment: .center)
+			}
+			VStack {
+				Slider(
+					value: $centroidsCount, in: 1...40, step: 1,
+					onEditingChanged: { editing in
+						if editing { return }
+						guard let currentDataset = dataset else { return }
+
+						isCalculating = true
+						converged = false
+
+						let centroidsCount = Int(centroidsCount)
+						guard centroidsCount != currentDataset.centroids.count else { return }
+						Task {
+							let updatedDataset = await Task.detached(priority: .userInitiated) {
+								[currentDataset] in
+								var localDataset = currentDataset
+								localDataset.createCentroids(count: centroidsCount)
+								return localDataset
+							}.value
+
+							self.dataset = updatedDataset
+							self.isCalculating = false
+						}
+					}
+				).disabled(isCalculating)
+
+				Toggle("use original colors", isOn: $originalColor)
+				Toggle("show image", isOn: $showImage)
+				Button("nextStep") {
 					guard let currentDataset = dataset else { return }
-
 					isCalculating = true
-					converged = false
-
-					let centroidsCount = Int(centroidsCount)
-					guard centroidsCount != currentDataset.centroids.count else { return }
 					Task {
-						let updatedDataset = await Task.detached(priority: .userInitiated) {
+						let result = await Task.detached(priority: .userInitiated) {
 							[currentDataset] in
 							var localDataset = currentDataset
-							localDataset.createCentroids(count: centroidsCount)
-							return localDataset
+							let didConverge = localDataset.updateClusters()
+							return (localDataset, didConverge)
 						}.value
 
-						self.dataset = updatedDataset
+						self.dataset = result.0
+						self.converged = result.1
 						self.isCalculating = false
 					}
-				}).disabled(isCalculating)
-			Text("\(centroidsCount)")
 
-			Toggle("use original colors", isOn: $originalColor)
-			Toggle("show image", isOn: $showImage)
-			Button("nextStep") {
-				guard let currentDataset = dataset else { return }
-				isCalculating = true
-				Task {
-					let result = await Task.detached(priority: .userInitiated) { [currentDataset] in
-						var localDataset = currentDataset
-						let didConverge = localDataset.updateClusters()
-						return (localDataset, didConverge)
-					}.value
+				}.keyboardShortcut(.space, modifiers: []).buttonStyle(.bordered).tint(
+					converged ? .green : nil
+				).disabled(converged).disabled(isCalculating)
 
-					self.dataset = result.0
-					self.converged = result.1
-					self.isCalculating = false
+				if showImage {
+					if originalColor, let image = image {
+						#if os(macOS)
+							Image(nsImage: image)
+								.resizable()
+								.scaledToFit()
+						#elseif os(iOS)
+							Image(uiImage: image)
+								.resizable()
+								.scaledToFit()
+						#endif
+					}
+					if !originalColor, let image = newImage {
+						#if os(macOS)
+							Image(nsImage: image)
+								.resizable()
+								.scaledToFit()
+						#elseif os(iOS)
+							Image(uiImage: image)
+								.resizable()
+								.scaledToFit()
+						#endif
+					}
+				} else {
+					Scene3DView(
+						scene: $scene, cameraState: $cameraState,
+						cameraCenter: Vec3(0xff / 2, 0xff / 2, 0xff / 2))
 				}
-
-			}.keyboardShortcut(.space, modifiers: []).buttonStyle(.bordered).tint(
-				converged ? .green : nil
-			).disabled(converged).disabled(isCalculating)
-
-			if showImage, let image = image {
-				#if os(macOS)
-					Image(nsImage: image)
-						.resizable()
-						.scaledToFit()
-				#elseif os(iOS)
-					Image(uiImage: image)
-						.resizable()
-						.scaledToFit()
-				#endif
-			} else {
-				Scene3DView(
-					scene: $scene, cameraState: $cameraState,
-					cameraCenter: Vec3(0xff / 2, 0xff / 2, 0xff / 2))
 			}
-		}.onAppear { setupSolver() }.onChange(of: dataset, { setupScene() }).onChange(
-			of: originalColor, { setupScene() }
+		}.onAppear {
+			setupSolver()
+			setupNewImage()
+		}.onChange(
+			of: dataset,
+			{
+				setupScene()
+				setupNewImage()
+			}
+		).onChange(
+			of: originalColor,
+			{
+				setupScene()
+				setupNewImage()
+			}
+		).onChange(
+			of: showImage,
+			{
+				setupNewImage()
+			}
 		)
 		.padding()
 		.focusable()
@@ -127,42 +227,79 @@ struct KMeansImageView: View {
 	}
 }
 
-extension KMeansSolver {
-	static func generateImageSet(from uiImage: UIImage) -> [Vec3] {
-		#if os(macOS)
-			guard let cgImage = uiImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
-			else { return [] }
-		#elseif os(iOS)
-			guard let cgImage = uiImage.cgImage else { return [] }
-		#endif
+private func generateImage(from points: [Vec3], width: Int, height: Int) -> NativeImage? {
+	guard points.count == width * height else { return nil }
 
-		let width = cgImage.width
-		let height = cgImage.height
-		let colorSpace = CGColorSpaceCreateDeviceRGB()
-		var pixels = [UInt8](repeating: 0, count: width * height * 4)
+	let colorSpace = CGColorSpaceCreateDeviceRGB()
+	var pixels = [UInt8](repeating: 0, count: width * height * 4)
 
-		guard
-			let context = CGContext(
-				data: &pixels, width: width, height: height, bitsPerComponent: 8,
-				bytesPerRow: width * 4, space: colorSpace,
-				bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-		else {
-			return []
+	for y in 0..<height {
+		for x in 0..<width {
+			let index = y * width + x
+			let offset = index * 4
+			let point = points[index]
+
+			pixels[offset] = UInt8(point.x)
+			pixels[offset + 1] = UInt8(point.y)
+			pixels[offset + 2] = UInt8(point.z)
+			pixels[offset + 3] = 255
 		}
-
-		context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-
-		var points: [Vec3] = []
-		for y in 0..<height {
-			for x in 0..<width {
-				let offset = (y * width + x) * 4
-				let r = Float(pixels[offset]) / 255.0
-				let g = Float(pixels[offset + 1]) / 255.0
-				let b = Float(pixels[offset + 2]) / 255.0
-
-				points.append(Vec3(r * 0xff, g * 0xff, b * 0xff))
-			}
-		}
-		return points
 	}
+	guard
+		let context = CGContext(
+			data: &pixels,
+			width: width,
+			height: height,
+			bitsPerComponent: 8,
+			bytesPerRow: width * 4,
+			space: colorSpace,
+			bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+		)
+	else {
+		return nil
+	}
+	guard let cgImage = context.makeImage() else { return nil }
+	#if os(macOS)
+		return NSImage(cgImage: cgImage, size: NSSize(width: width, height: height))
+	#elseif os(iOS)
+		return UIImage(cgImage: cgImage)
+	#endif
+}
+
+private func generateImageSet(from uiImage: NativeImage) -> [Vec3] {
+	#if os(macOS)
+		guard let cgImage = uiImage.cgImage(forProposedRect: nil, context: nil, hints: nil)
+		else { return [] }
+	#elseif os(iOS)
+		guard let cgImage = uiImage.cgImage else { return [] }
+	#endif
+
+	let width = cgImage.width
+	let height = cgImage.height
+	let colorSpace = CGColorSpaceCreateDeviceRGB()
+	var pixels = [UInt8](repeating: 0, count: width * height * 4)
+
+	guard
+		let context = CGContext(
+			data: &pixels, width: width, height: height, bitsPerComponent: 8,
+			bytesPerRow: width * 4, space: colorSpace,
+			bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+	else {
+		return []
+	}
+
+	context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+	var points: [Vec3] = []
+	for y in 0..<height {
+		for x in 0..<width {
+			let offset = (y * width + x) * 4
+			let r = Float(pixels[offset])
+			let g = Float(pixels[offset + 1])
+			let b = Float(pixels[offset + 2])
+
+			points.append(Vec3(r, g, b))
+		}
+	}
+	return points
 }
