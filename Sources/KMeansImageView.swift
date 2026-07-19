@@ -52,8 +52,17 @@ struct KMeansImageView: View {
 
 	private func setupSolver() {
 		guard let image else { return }
-		let points = generateImageSet(from: image)
-		dataset = KMeansSolver(points: points, clusters: Int(centroidsCount))
+        self.isCalculating = true
+		let centroids = Int(centroidsCount)
+		Task {
+			let newDataset = await Task.detached(priority: .userInitiated) {
+				let points = generateImageSet(from: image)
+				let dataset = KMeansSolver(points: points, clusters: centroids)
+				return dataset
+			}.value
+			self.dataset = newDataset
+			self.isCalculating = false
+		}
 	}
 
 	private func setupScene() {
