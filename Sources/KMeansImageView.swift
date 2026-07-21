@@ -1,4 +1,5 @@
 import Inject
+import PhotosUI
 import Renderer3D
 import SwiftUI
 
@@ -29,9 +30,24 @@ struct KMeansImageView: View {
 	@State private var cameraState = CameraState()
 	@State private var scene = Scene3D()
 
-	private func setupNewImage() {
+	@State private var newImageSelection: PhotosPickerItem? = nil
+
+	private func loadNewImage() {
+		guard let imageSelection = newImageSelection else { return }
+		self.isCalculating = true
+		imageSelection.loadTransferable(type: Data.self) { result in
+			DispatchQueue.main.async {
+				guard case .success(let data?) = result else { return }
+				guard let nsImage = NativeImage(data: data) else { return }
+				self.image = nsImage
+			}
+		}
+	}
+
+	private func setupUpdatedImage() {
 		guard showImage && !originalColor else { return }
 		guard let dataset = dataset, let image = image else { return }
+		isCalculating = true
 
 		#if os(macOS)
 			guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
@@ -48,11 +64,13 @@ struct KMeansImageView: View {
 			dataset.centroids[p.cluster]
 		}
 		self.newImage = generateImage(from: quantizedPoints, width: width, height: height)
+		isCalculating = false
 	}
 
 	private func setupSolver() {
 		guard let image else { return }
-        self.isCalculating = true
+
+		isCalculating = true
 		let centroids = Int(centroidsCount)
 		Task {
 			let newDataset = await Task.detached(priority: .userInitiated) {
@@ -61,11 +79,14 @@ struct KMeansImageView: View {
 				return dataset
 			}.value
 			self.dataset = newDataset
-			self.isCalculating = false
+			isCalculating = false
 		}
 	}
 
 	private func setupScene() {
+		guard !showImage else { return }
+
+		isCalculating = true
 		let points =
 			originalColor
 			? dataset?.points.map({ p in
@@ -84,6 +105,8 @@ struct KMeansImageView: View {
 		scene.append(objects: points)
 		scene.append(objects: centers)
 		scene.finishDeclaration()
+		self.isCalculating = false
+
 	}
 
 	private func copyToClipboard(_ text: String) {
@@ -94,6 +117,69 @@ struct KMeansImageView: View {
 		#elseif os(iOS)
 			UIPasteboard.general.string = text
 		#endif
+	}
+
+	var controls: some View {
+		VStack {
+			PhotosPicker(
+				selection: $newImageSelection,
+				matching: .images
+			) {
+				Text("load new image")
+			}.onChange(
+				of: newImageSelection,
+				{
+					loadNewImage()
+				}
+			).buttonStyle(.bordered)
+			Slider(
+				value: $centroidsCount, in: 1...40, step: 1,
+				onEditingChanged: { editing in
+					if editing { return }
+					guard let currentDataset = dataset else { return }
+
+					isCalculating = true
+					converged = false
+
+					let centroidsCount = Int(centroidsCount)
+					guard centroidsCount != currentDataset.centroids.count else { return }
+					Task {
+						let updatedDataset = await Task.detached(priority: .userInitiated) {
+							[currentDataset] in
+							var localDataset = currentDataset
+							localDataset.createCentroids(count: centroidsCount)
+							return localDataset
+						}.value
+
+						self.dataset = updatedDataset
+						self.isCalculating = false
+					}
+				}
+			)
+
+			Toggle("use original colors", isOn: $originalColor)
+			Toggle("show image", isOn: $showImage)
+			Button("nextStep") {
+				guard let currentDataset = dataset else { return }
+				isCalculating = true
+				Task {
+					let result = await Task.detached(priority: .userInitiated) {
+						[currentDataset] in
+						var localDataset = currentDataset
+						let didConverge = localDataset.updateClusters()
+						return (localDataset, didConverge)
+					}.value
+
+					self.dataset = result.0
+					self.converged = result.1
+					self.isCalculating = false
+				}
+
+			}.keyboardShortcut(.space, modifiers: []).buttonStyle(.bordered).tint(
+				converged ? .green : nil
+			).disabled(converged)
+		}
+
 	}
 
 	var body: some View {
@@ -132,53 +218,15 @@ struct KMeansImageView: View {
 					maxHeight: nil, alignment: .center)
 			}
 			VStack {
-				Slider(
-					value: $centroidsCount, in: 1...40, step: 1,
-					onEditingChanged: { editing in
-						if editing { return }
-						guard let currentDataset = dataset else { return }
-
-						isCalculating = true
-						converged = false
-
-						let centroidsCount = Int(centroidsCount)
-						guard centroidsCount != currentDataset.centroids.count else { return }
-						Task {
-							let updatedDataset = await Task.detached(priority: .userInitiated) {
-								[currentDataset] in
-								var localDataset = currentDataset
-								localDataset.createCentroids(count: centroidsCount)
-								return localDataset
-							}.value
-
-							self.dataset = updatedDataset
-							self.isCalculating = false
+				controls
+					.opacity(isCalculating ? 0 : 1)
+					.disabled(isCalculating)
+					.overlay {
+						if isCalculating {
+							Text("please wait for the calculation to end")
+								.multilineTextAlignment(.center)
 						}
 					}
-				).disabled(isCalculating)
-
-				Toggle("use original colors", isOn: $originalColor)
-				Toggle("show image", isOn: $showImage)
-				Button("nextStep") {
-					guard let currentDataset = dataset else { return }
-					isCalculating = true
-					Task {
-						let result = await Task.detached(priority: .userInitiated) {
-							[currentDataset] in
-							var localDataset = currentDataset
-							let didConverge = localDataset.updateClusters()
-							return (localDataset, didConverge)
-						}.value
-
-						self.dataset = result.0
-						self.converged = result.1
-						self.isCalculating = false
-					}
-
-				}.keyboardShortcut(.space, modifiers: []).buttonStyle(.bordered).tint(
-					converged ? .green : nil
-				).disabled(converged).disabled(isCalculating)
-
 				if showImage {
 					if originalColor, let image = image {
 						#if os(macOS)
@@ -210,25 +258,21 @@ struct KMeansImageView: View {
 			}
 		}.onAppear {
 			setupSolver()
-			setupNewImage()
-		}.onChange(
-			of: dataset,
-			{
-				setupScene()
-				setupNewImage()
-			}
-		).onChange(
-			of: originalColor,
-			{
-				setupScene()
-				setupNewImage()
-			}
-		).onChange(
-			of: showImage,
-			{
-				setupNewImage()
-			}
-		)
+		}
+		.onChange(of: image) {
+			setupSolver()
+		}
+		.onChange(of: dataset) {
+			setupScene()
+			setupUpdatedImage()
+		}
+		.onChange(of: originalColor) {
+			setupScene()
+			setupUpdatedImage()
+		}
+		.onChange(of: showImage) {
+			setupUpdatedImage()
+		}
 		.padding()
 		.focusable()
 		.focusEffectDisabled()
