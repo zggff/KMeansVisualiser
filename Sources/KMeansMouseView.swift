@@ -24,10 +24,10 @@ struct KMeansMouseView: View {
 			Primitive.Cube(center: p, size: 2, color: Vec3(0.2, 0.2, 0.2))
 		})
 
-		scene.removeAll()
-		scene.append(objects: points)
-		scene.append(objects: centers)
-		scene.finishDeclaration()
+		scene.draw { ctx in
+			ctx.append(objects: points)
+			ctx.append(objects: centers)
+		}
 	}
 
 	var body: some View {

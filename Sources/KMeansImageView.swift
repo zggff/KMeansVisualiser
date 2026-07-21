@@ -78,10 +78,11 @@ struct KMeansImageView: View {
 				Primitive.Sphere(center: p, radius: 2, color: Vec3(0.2, 0.2, 0.2))
 			}) ?? []
 
-		scene.removeAll()
-		scene.append(objects: points)
-		scene.append(objects: centers)
-		scene.finishDeclaration()
+		scene.draw { ctx in
+			ctx.append(objects: points)
+			ctx.append(objects: centers)
+		}
+
 		self.isCalculating = false
 
 	}
