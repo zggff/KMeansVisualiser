@@ -16,7 +16,6 @@ targets:
   KMeans:
     type: application
     platform: [macOS, iOS]
-    # deploymentTarget: "16.0"
     sources: [Sources, Resources]
     dependencies:
       - package: Inject 
@@ -27,8 +26,8 @@ targets:
         MACOSX_DEPLOYMENT_TARGET: "15.0"
         IPHONEOS_DEPLOYMENT_TARGET: "18.0"
         SWIFT_VERSION: 6.3
-        # SWIFT_OBJC_BRIDGING_HEADER: Sources/metal/shader/bridge.h
         GENERATE_INFOPLIST_FILE: YES
+        "INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription[sdk=iphoneos*]": "to save generated files"
       configs:
         Debug:
           OTHER_LDFLAGS: "$(inherited) -Xlinker -interposable"

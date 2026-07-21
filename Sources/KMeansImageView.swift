@@ -1,27 +1,18 @@
 import Inject
-import PhotosUI
 import Renderer3D
 import SwiftUI
-
-#if os(macOS)
-	import AppKit
-	public typealias NativeImage = NSImage
-#elseif os(iOS)
-	import UIKit
-	public typealias NativeImage = UIImage
-#endif
 
 struct KMeansImageView: View {
 	@ObserveInjection var redraw
 
 	@State var centroidsCount: Float = 10
 
-	@State private var image: NativeImage? = {
+	@State private var imageOld: NativeImage? = {
 		guard let path = Bundle.main.path(forResource: "roses", ofType: "jpg") else { return nil }
 		return NativeImage(contentsOfFile: path)
 	}()
+	@State private var imageNew: NativeImage? = nil
 
-	@State private var newImage: NativeImage? = nil
 	@State private var dataset: KMeansSolver? = nil
 	@State private var converged = false
 	@State private var originalColor = true
@@ -30,23 +21,9 @@ struct KMeansImageView: View {
 	@State private var cameraState = CameraState()
 	@State private var scene = Scene3D()
 
-	@State private var newImageSelection: PhotosPickerItem? = nil
-
-	private func loadNewImage() {
-		guard let imageSelection = newImageSelection else { return }
-		self.isCalculating = true
-		imageSelection.loadTransferable(type: Data.self) { result in
-			DispatchQueue.main.async {
-				guard case .success(let data?) = result else { return }
-				guard let nsImage = NativeImage(data: data) else { return }
-				self.image = nsImage
-			}
-		}
-	}
-
 	private func setupUpdatedImage() {
 		guard showImage && !originalColor else { return }
-		guard let dataset = dataset, let image = image else { return }
+		guard let dataset = dataset, let image = imageOld else { return }
 		isCalculating = true
 
 		#if os(macOS)
@@ -63,18 +40,18 @@ struct KMeansImageView: View {
 		let quantizedPoints = dataset.points.map { p in
 			dataset.centroids[p.cluster]
 		}
-		self.newImage = generateImage(from: quantizedPoints, width: width, height: height)
+		self.imageNew = generateImage(from: quantizedPoints, width: width, height: height)
 		isCalculating = false
 	}
 
 	private func setupSolver() {
-		guard let image else { return }
+		guard let imageOld else { return }
 
 		isCalculating = true
 		let centroids = Int(centroidsCount)
 		Task {
 			let newDataset = await Task.detached(priority: .userInitiated) {
-				let points = generateImageSet(from: image)
+				let points = generateImageSet(from: imageOld)
 				let dataset = KMeansSolver(points: points, clusters: centroids)
 				return dataset
 			}.value
@@ -121,17 +98,9 @@ struct KMeansImageView: View {
 
 	var controls: some View {
 		VStack {
-			PhotosPicker(
-				selection: $newImageSelection,
-				matching: .images
-			) {
-				Text("load new image")
-			}.onChange(
-				of: newImageSelection,
-				{
-					loadNewImage()
-				}
-			).buttonStyle(.bordered)
+			ImageHandler(
+				imageOld: $imageOld, imageNew: $imageNew,
+				saveDisabled: isCalculating || !showImage || originalColor)
 			Slider(
 				value: $centroidsCount, in: 1...40, step: 1,
 				onEditingChanged: { editing in
@@ -228,7 +197,7 @@ struct KMeansImageView: View {
 						}
 					}
 				if showImage {
-					if originalColor, let image = image {
+					if originalColor, let image = imageOld {
 						#if os(macOS)
 							Image(nsImage: image)
 								.resizable()
@@ -239,7 +208,7 @@ struct KMeansImageView: View {
 								.scaledToFit()
 						#endif
 					}
-					if !originalColor, let image = newImage {
+					if !originalColor, let image = imageNew {
 						#if os(macOS)
 							Image(nsImage: image)
 								.resizable()
@@ -259,7 +228,7 @@ struct KMeansImageView: View {
 		}.onAppear {
 			setupSolver()
 		}
-		.onChange(of: image) {
+		.onChange(of: imageOld) {
 			setupSolver()
 		}
 		.onChange(of: dataset) {
