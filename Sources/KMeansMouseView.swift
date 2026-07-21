@@ -51,7 +51,7 @@ struct KMeansMouseView: View {
 			}.keyboardShortcut(.space, modifiers: []).buttonStyle(.bordered).tint(
 				converged ? .green : nil
 			).disabled(converged)
-			Scene3DView(scene: $scene, cameraState: $cameraState)
+			Scene3DView(scene: scene, cameraState: $cameraState)
 		}.onAppear { setupScene() }.onChange(of: dataset, { setupScene() })
 			.padding()
 			.focusable()

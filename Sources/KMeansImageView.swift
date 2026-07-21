@@ -221,7 +221,7 @@ struct KMeansImageView: View {
 					}
 				} else {
 					Scene3DView(
-						scene: $scene, cameraState: $cameraState,
+						scene: scene, cameraState: $cameraState,
 						cameraCenter: Vec3(0xff / 2, 0xff / 2, 0xff / 2))
 				}
 			}

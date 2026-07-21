@@ -10,18 +10,18 @@ struct CameraState: Observable {
 
 struct Scene3DView: View {
 	init(
-		scene: Binding<Scene3D>,
+		scene: Scene3D,
 		cameraState: Binding<CameraState>,
 		cameraCenter: Vec3 = Vec3(0, 0, 0)
 	) {
-        self._scene = scene
+		self.scene = scene
 		self._cameraState = cameraState
 		self.cameraCenter = cameraCenter
 	}
 
 	@ObserveInjection var redraw
 	@Binding var cameraState: CameraState
-    @Binding var scene: Scene3D
+	var scene: Scene3D
 
 	let minDistance: Float = 4.0
 
@@ -35,7 +35,7 @@ struct Scene3DView: View {
 				radius: cameraState.distance,
 				look_at: cameraCenter,
 				origin: cameraCenter),
-			scene: $scene,
+			scene: scene,
 			onScroll: { deltaY in
 				cameraState.distance = max(minDistance, cameraState.distance - Float(deltaY))
 			}
