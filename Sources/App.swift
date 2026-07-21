@@ -59,10 +59,10 @@ struct HomeView: View {
 	var body: some View {
 		Button("go to a mouse view") {
 			router.push(.kmeansMouse)
-		}
+		}.buttonStyle(.bordered)
 		Button("go to an image view") {
 			router.push(.kmeansImage)
-		}
+		}.buttonStyle(.bordered)
 
 	}
 }
