@@ -11,8 +11,6 @@ KMeans.xcodeproj: project.yml
 KMeans.app: .build/Build/Products/Debug/KMeans.app .build/Build/Products/Release/KMeans.app
 	cp -r $< $@
 
-build: .build/Build/Products/Debug/KMeans.app
-
 .build/Build/Products/Debug/KMeans.app: $(SOURCES) KMeans.xcodeproj
 	xcodebuild \
 		-project KMeans.xcodeproj \
@@ -28,3 +26,7 @@ build: .build/Build/Products/Debug/KMeans.app
 		-configuration Release \
 		-destination "platform=macOS" \
 		-derivedDataPath .build
+
+.PHONY release: .build/Build/Products/Release/KMeans.app
+.PHONY build: .build/Build/Products/Release/KMeans.app
+
