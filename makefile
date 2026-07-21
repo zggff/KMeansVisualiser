@@ -8,12 +8,23 @@ buildServer.json: KMeans.xcodeproj
 KMeans.xcodeproj: project.yml
 	xcodegen generate
 
-KMeans.app: .build/Build/Products/Debug/KMeans.app
+KMeans.app: .build/Build/Products/Debug/KMeans.app .build/Build/Products/Release/KMeans.app
 	cp -r $< $@
+
+build: .build/Build/Products/Debug/KMeans.app
 
 .build/Build/Products/Debug/KMeans.app: $(SOURCES) KMeans.xcodeproj
 	xcodebuild \
 		-project KMeans.xcodeproj \
-		-scheme KMeans \
-		-destination "platform=macOS"
+		-scheme KMeans_macOS \
+		-configuration Debug \
+		-destination "platform=macOS" \
+		-derivedDataPath .build
+
+.build/Build/Products/Release/KMeans.app: $(SOURCES) KMeans.xcodeproj
+	xcodebuild \
+		-project KMeans.xcodeproj \
+		-scheme KMeans_macOS \
+		-configuration Release \
+		-destination "platform=macOS" \
 		-derivedDataPath .build
