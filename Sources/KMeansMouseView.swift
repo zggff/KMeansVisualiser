@@ -1,5 +1,5 @@
 import Inject
-import Renderer3D
+import Render3DViews
 import SwiftUI
 
 struct KMeansMouseView: View {
@@ -10,23 +10,27 @@ struct KMeansMouseView: View {
 	@State private var dataset: KMeansSolver = KMeansSolver(
 		points: KMeansSolver.generateMouseSet(), clusters: 3)
 	@State private var converged = false
-	@State private var cameraState = CameraState()
+	@State private var cameraState = OrbitingCameraState()
 	@State private var scene = Scene3D()
 
 	private func setupScene() {
 		let colors = [
-			Vec3(0.8, 0, 0), Vec3(0.8, 0.8, 0), Vec3(0, 0.8, 0), Vec3(0, 0.8, 0.8), Vec3(0, 0, 0.8),
+			Vec4(0.8, 0, 0, 1.0),
+			Vec4(0.8, 0.8, 0, 1.0),
+			Vec4(0, 0.8, 0, 1.0),
+			Vec4(0, 0.8, 0.8, 1.0),
+			Vec4(0, 0, 0.8, 1.0),
 		]
 		let points = dataset.points.map({ p in
-			Primitive.Sphere(center: p.pos, radius: 1, color: colors[p.cluster % colors.count])
+			Primitive.Cube(center: p.pos, size: 1, color: colors[p.cluster % colors.count])
 		})
 		let centers = dataset.centroids.enumerated().map({ (i, p) in
-			Primitive.Cube(center: p, size: 2, color: Vec3(0.2, 0.2, 0.2))
+			Primitive.Sphere(center: p, radius: 3, color: Vec4(0.2, 0.2, 0.2, 1.0))
 		})
 
 		scene.draw { ctx in
-			ctx.append(objects: points)
-			ctx.append(objects: centers)
+			ctx.draw(points)
+			ctx.draw(centers)
 		}
 	}
 
@@ -51,7 +55,7 @@ struct KMeansMouseView: View {
 			}.keyboardShortcut(.space, modifiers: []).buttonStyle(.bordered).tint(
 				converged ? .green : nil
 			).disabled(converged)
-			Scene3DView(scene: scene, cameraState: $cameraState)
+			OrbitingSceneView(scene: scene, cameraState: $cameraState)
 		}.onAppear { setupScene() }.onChange(of: dataset, { setupScene() })
 			.padding()
 			.focusable()

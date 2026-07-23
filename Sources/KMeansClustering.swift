@@ -1,4 +1,4 @@
-import Renderer3D
+import Render3D
 import simd
 
 struct KMeansSolver: Equatable {

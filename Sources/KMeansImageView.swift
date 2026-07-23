@@ -1,5 +1,5 @@
 import Inject
-import Renderer3D
+import Render3DViews
 import SwiftUI
 
 struct KMeansImageView: View {
@@ -18,7 +18,7 @@ struct KMeansImageView: View {
 	@State private var originalColor = true
 	@State private var showImage = false
 	@State private var isCalculating = false
-	@State private var cameraState = CameraState()
+	@State private var cameraState = OrbitingCameraState()
 	@State private var scene = Scene3D()
 
 	private func setupUpdatedImage() {
@@ -64,23 +64,21 @@ struct KMeansImageView: View {
 		guard !showImage else { return }
 
 		isCalculating = true
-		let points =
-			originalColor
-			? dataset?.points.map({ p in
-				Primitive.Cube(center: p.pos, size: 1, color: p.pos / 0xff)
-			}) ?? []
-			: dataset?.points.map({ p in
-				Primitive.Cube(center: p.pos, size: 1, color: dataset!.centroids[p.cluster] / 0xff)
-			}) ?? []
+		guard let dataset else { return }
 
-		let centers =
-			dataset?.centroids.enumerated().map({ (i, p) in
-				Primitive.Sphere(center: p, radius: 2, color: Vec3(0.2, 0.2, 0.2))
-			}) ?? []
+		let points = stride(from: 0, to: dataset.points.count, by: 10).map { i in
+			let p = dataset.points[i]
+			let c3: Vec3 = (originalColor ? p.pos : dataset.centroids[p.cluster]) / 0xff
+			return Primitive.CubePrimitive(
+				center: p.pos, size: 1, color: Vec4(c3.x, c3.y, c3.z, 1.0))
+		}
+		let centroids = dataset.centroids.map { p in
+			Primitive.Sphere(center: p, radius: 2, color: Vec4(0.2, 0.2, 0.2, 1.0))
+		}
 
 		scene.draw { ctx in
-			ctx.append(objects: points)
-			ctx.append(objects: centers)
+			ctx.draw(centroids)
+			ctx.draw(points)
 		}
 
 		self.isCalculating = false
@@ -221,7 +219,7 @@ struct KMeansImageView: View {
 						#endif
 					}
 				} else {
-					Scene3DView(
+					OrbitingSceneView(
 						scene: scene, cameraState: $cameraState,
 						cameraCenter: Vec3(0xff / 2, 0xff / 2, 0xff / 2))
 				}

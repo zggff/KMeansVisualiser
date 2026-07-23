@@ -9,7 +9,7 @@ packages:
   InjectionNext:
     url: https://github.com/johnno1962/InjectionNext.git
     from: 2.0.0
-  Renderer3D:
+  Render3DViews:
     path: ./Renderer3D
 
 targets:
@@ -20,7 +20,7 @@ targets:
     dependencies:
       - package: Inject 
       - package: InjectionNext 
-      - package: Renderer3D
+      - package: Render3DViews
     settings:
       base:
         MACOSX_DEPLOYMENT_TARGET: "15.0"
